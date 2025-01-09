@@ -1,0 +1,5 @@
+data/bm25_scored_evidence
+models/
+env/
+.idea/
+**/.ipynb_checkpoints/
