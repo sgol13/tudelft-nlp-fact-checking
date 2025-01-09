@@ -1,5 +1,11 @@
-data/bm25_scored_evidence
 models/
 env/
 .idea/
 **/.ipynb_checkpoints/
+**/__pycache__/
+
+# google drive upload/download temp dirs
+.tmp*
+
+# too large
+data/bm25_scored_evidence

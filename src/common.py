@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import Dict
 
 import numpy as np
 import torch
@@ -14,7 +14,6 @@ def _build_import_relative_path(path: str):
 
 DATA_PATH = _build_import_relative_path("../data")
 MODELS_PATH = _build_import_relative_path("../models")
-
 
 def get_device() -> torch.device:
     if torch.cuda.is_available():
