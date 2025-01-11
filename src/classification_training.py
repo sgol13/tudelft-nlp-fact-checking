@@ -1,3 +1,5 @@
+from typing import Tuple
+
 import torch
 import numpy as np
 import random
@@ -5,6 +7,8 @@ import random
 from torch import nn
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm.auto import tqdm
+
+from src.training_manager import TrainingManager
 
 
 class ClassificationTraining:
@@ -43,82 +47,78 @@ class ClassificationTraining:
         torch.manual_seed(random_state)
         torch.cuda.manual_seed_all(random_state)
 
+        self._training_manager = TrainingManager(model_name)
+        self._training_manager.start_training(model)
+
     def train(self, epochs: int) -> None:
         for _ in range(epochs):
-            self._train_epoch()
+            print(f"EPOCH {self._training_manager.epochs}")
 
-    def load_model(self, checkpoint_name: str) -> None:
-        pass
+            avg_train_accuracy, avg_train_loss = self._train_epoch()
+            avg_val_accuracy, avg_val_loss = self._evaluate()
 
-    def save_model(self) -> None:
-        pass
+            self._training_manager.step(self._model, avg_val_accuracy)
 
-    def _train_epoch(self):
+            print(f"    train accuracy: {avg_train_accuracy:.3f}")
+            print(f"     eval accuracy: {avg_val_accuracy:.3f}\n")
+            print(f"    avg train loss: {avg_train_loss:.3f}")
+            print(f"     avg eval loss: {avg_val_loss:.3f}\n")
+
+
+    def _train_epoch(self) -> Tuple[float, float]:
         self._model.train()
 
         total_train_accuracy = 0
         total_train_loss = 0
-        for b_input_tokens, b_input_mask, b_labels in tqdm(self._train_dataloader):
+
+        for b_input_tokens, b_input_mask, b_labels in tqdm(self._train_dataloader, desc='train'):
             b_input_tokens = b_input_tokens.to(self._device)
             b_input_mask = b_input_mask.to(self._device)
             b_labels = b_labels.to(self._device)
 
             self._model.zero_grad()
 
-            probas = self._model(b_input_tokens, b_input_mask)
+            b_logits = self._model(b_input_tokens, b_input_mask)
 
-            loss = self._loss_func(probas, b_labels)
-            total_train_loss += loss.item()
-
+            loss = self._loss_func(b_logits, b_labels)
             loss.backward()
-
             self._optimizer.step()
 
-            logits = probas.detach().cpu().numpy()
-            label_ids = b_labels.cpu().numpy()
-            total_train_accuracy += self._accuracy(logits, label_ids)
+            total_train_accuracy += self._accuracy(b_logits, b_labels)
+            total_train_loss += loss.item()
 
         avg_train_accuracy = total_train_accuracy / len(self._train_dataloader)
-
         avg_train_loss = total_train_loss / len(self._train_dataloader)
 
-        print(" Train Accuracy: {0:.2f}".format(avg_train_accuracy))
-        print(" Average training loss: {0:.2f}".format(avg_train_loss))
+        return avg_train_accuracy, avg_train_loss
 
 
-    def _evaluate(self):
-        model.eval()
+    def _evaluate(self) -> Tuple[float, float]:
+        self._model.eval()
 
         total_eval_accuracy = 0
         total_eval_loss = 0
-        nb_eval_steps = 0
 
-        for batch in tqdm(self._validation_dataloader):
-            b_input_ids = batch[0].to(device)
-            b_input_mask = batch[1].to(device)
-            b_labels = batch[2].to(device)
+        for b_input_tokens, b_input_mask, b_labels in tqdm(self._val_dataloader, desc='eval'):
+            b_input_tokens = b_input_tokens.to(self._device)
+            b_input_mask = b_input_mask.to(self._device)
+            b_labels = b_labels.to(self._device)
 
             with torch.no_grad():
-                logits = model(b_input_ids, b_input_mask)
+                b_logits = self._model(b_input_tokens, b_input_mask)
 
-            loss = loss_func(logits, b_labels)
+            loss = self._loss_func(b_logits, b_labels)
+
+            total_eval_accuracy += self._accuracy(b_logits, b_labels)
             total_eval_loss += loss.item()
 
-            logits = logits.detach().cpu().numpy()
-            label_ids = b_labels.to('cpu').numpy()
+        avg_val_accuracy = total_eval_accuracy / len(self._val_dataloader)
+        avg_val_loss = total_eval_loss / len(self._val_dataloader)
 
-            total_eval_accuracy += accuracy(logits, label_ids)
-
-        avg_val_accuracy = total_eval_accuracy / len(validation_dataloader)
-        print("  Accuracy: {0:.2f}".format(avg_val_accuracy))
-
-        avg_val_loss = total_eval_loss / len(validation_dataloader)
-
-        print("  Validation Loss: {0:.2f}".format(avg_val_loss))
-        print("  Validation took: {:}".format(validation_time))
+        return avg_val_accuracy, avg_val_loss
 
     @staticmethod
-    def _accuracy(output: np.ndarray, labels: np.ndarray) -> float:
-        pred_flat = np.argmax(output, axis=1).flatten()
+    def _accuracy(output: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+        pred_flat = torch.argmax(output).flatten()
         labels_flat = labels.flatten()
-        return np.sum(pred_flat == labels_flat) / len(labels_flat)
+        return torch.sum(pred_flat == labels_flat) / len(labels_flat)

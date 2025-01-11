@@ -1,15 +1,16 @@
 import os
 import torch
 import re
+import shutil
 
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, List
 from torch import nn
 
-from src.common import MODELS_PATH, CHECKPOINTS_RELATIVE_PATH
+from src.common import MODELS_PATH, CHECKPOINTS_RELATIVE_PATH, cwd_relative_path
 
 
 class TrainingManager:
-    _CHECKPOINT_REGEX = re.compile(r"(0[1-9]|\d{2,})_\d{3}")
+    _CHECKPOINT_REGEX = re.compile(r"(0[1-9]|\d{2,})_acc_\d{3}")
 
     def __init__(self, model_name: str) -> None:
         self._model_name: str = model_name
@@ -45,26 +46,37 @@ class TrainingManager:
 
     def save_final_model(self, model: nn.Module) -> None:
         filename = self._model_name.replace('/', '_')
-        abs_path = os.path.join(self._model_path, filename)
-        self._save_model(model, abs_path)
+        dest_abs_path = os.path.join(self._model_path, filename)
+
+        best_checkpoint, best_epoch = self._get_best_checkpoint()
+        assert best_checkpoint, "Model not trained (no checkpoints found)"
+
+        best_checkpoint_abs_path = os.path.join(self._checkpoints_path, best_checkpoint)
+        shutil.copy(best_checkpoint_abs_path, dest_abs_path)
+
+        print(f"Saved best model (epoch {best_epoch}) to: {cwd_relative_path(dest_abs_path)}")
 
     def _save_checkpoint(self, model: nn.Module, val_accuracy: float) -> None:
         epoch_str = f"{self._epoch:02}"
         val_accuracy_str = f"{val_accuracy:.3f}".split('.')[1]
-        filename = f'{epoch_str}_{val_accuracy_str}'
+        filename = f'{epoch_str}_acc_{val_accuracy_str}'
         assert self._CHECKPOINT_REGEX.fullmatch(filename), f"Invalid filename: {filename}"
 
         abs_path = os.path.join(self._checkpoints_path, filename)
-        self._save_model(model, abs_path)
-
-    @staticmethod
-    def _save_model(model: nn.Module, abs_path: str) -> None:
         torch.save(model.state_dict(), abs_path)
+        print(f"Saved checkpoint to {cwd_relative_path(abs_path)}")
 
-    def _load_last_checkpoint(self) -> Optional[Tuple[Dict[str, Any], int]]:
+    def _get_list_of_checkpoints(self) -> Optional[List[str]]:
         if not os.path.exists(self._checkpoints_path):
             return None
 
+        checkpoint_files = os.listdir(self._checkpoints_path)
+        assert all(self._CHECKPOINT_REGEX.fullmatch(f) for f in checkpoint_files), \
+            f"Invalid checkpoint filenames in {self._checkpoints_path}"
+
+        return checkpoint_files if len(checkpoint_files) > 0 else None
+
+    def _load_last_checkpoint(self) -> Optional[Tuple[Dict[str, Any], int]]:
         checkpoint_files = self._get_list_of_checkpoints()
         if not checkpoint_files:
             return None
@@ -75,8 +87,11 @@ class TrainingManager:
         epoch = int(last_checkpoint.split('_')[0])
         return model_weights, epoch
 
-    def _get_list_of_checkpoints(self):
-        checkpoint_files = os.listdir(self._checkpoints_path)
-        assert all(self._CHECKPOINT_REGEX.fullmatch(f) for f in checkpoint_files), \
-            f"Invalid checkpoint filenames in {self._checkpoints_path}"
-        return checkpoint_files
+    def _get_best_checkpoint(self) -> Optional[Tuple[str, int]]:
+        checkpoint_files = self._get_list_of_checkpoints()
+        if not checkpoint_files:
+            return None
+
+        best_checkpoint_file = max(checkpoint_files, key=lambda x: x.split('_')[1])
+        epoch = int(best_checkpoint_file.split('_')[0])
+        return best_checkpoint_file, epoch

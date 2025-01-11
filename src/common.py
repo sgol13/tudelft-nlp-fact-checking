@@ -9,7 +9,6 @@ def _build_import_relative_path(path: str):
     path_relative_to_this_dir = os.path.join(this_dir_abs_path, path)
     return os.path.abspath(path_relative_to_this_dir)
 
-
 DATA_PATH = _build_import_relative_path("../data")
 MODELS_PATH = _build_import_relative_path("../models")
 CHECKPOINTS_RELATIVE_PATH = "checkpoints"
@@ -36,7 +35,6 @@ def read_json(file_path: str) -> Dict[str, str]:
     return data
 
 
-def load_model(model: torch.nn.Module, path: str):
-    abs_path = os.path.join(MODELS_PATH, path)
-    model.load_state_dict(torch.load(abs_path))
-    return model
+def cwd_relative_path(abs_path: str) -> str:
+    cwd = os.getcwd()
+    return os.path.relpath(abs_path, cwd)
