@@ -1,9 +1,7 @@
 from typing import Dict
 
-import numpy as np
 import torch
 import json
-import datetime
 import os
 
 def _build_import_relative_path(path: str):
@@ -35,22 +33,6 @@ def read_json(file_path: str) -> Dict[str, str]:
     with open(file_path, "r") as f:
         data = json.load(f)
     return data
-
-
-def accuracy(output: np.ndarray, labels: np.ndarray) -> float:
-    pred_flat = np.argmax(output, axis=1).flatten()
-    labels_flat = labels.flatten()
-    return np.sum(pred_flat == labels_flat) / len(labels_flat)
-
-
-def format_time(elapsed: float) -> str:
-    """"
-    Takes a time in seconds and returns a string hh:mm:ss
-    """
-    elapsed_rounded = int(round(elapsed))
-
-    # Format as hh:mm:ss
-    return str(datetime.timedelta(seconds=elapsed_rounded))
 
 
 def save_model(model: torch.nn.Module, path: str):
