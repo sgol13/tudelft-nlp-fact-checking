@@ -8,6 +8,7 @@ from torch import nn
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm.auto import tqdm
 
+from src.early_stopping import EarlyStopping
 from src.training_manager import TrainingManager
 
 
@@ -21,6 +22,7 @@ class ClassificationTraining:
                  optimizer: torch.optim.Optimizer,
                  loss_function: torch.nn.Module,
                  batch_size: int,
+                 early_stopping: EarlyStopping,
                  device: torch.device,
                  random_state: int,
                  ):
@@ -28,6 +30,7 @@ class ClassificationTraining:
         self._model: torch.nn.Module = model
         self._optimizer: torch.optim.Optimizer = optimizer
         self._loss_func: torch.nn.Module = loss_function
+        self._early_stopping: EarlyStopping = early_stopping
         self._device: torch.device = device
 
         self._train_dataloader: torch.utils.data.DataLoader = DataLoader(
@@ -52,18 +55,24 @@ class ClassificationTraining:
 
     def train(self, epochs: int) -> None:
         for _ in range(epochs):
-            print(f"EPOCH {self._training_manager.epochs}")
+            print(f"\nEPOCH {self._training_manager.epochs}")
 
             avg_train_accuracy, avg_train_loss = self._train_epoch()
             avg_val_accuracy, avg_val_loss = self._evaluate()
-
-            self._training_manager.step(self._model, avg_val_accuracy)
 
             print(f"    train accuracy: {avg_train_accuracy:.3f}")
             print(f"     eval accuracy: {avg_val_accuracy:.3f}\n")
             print(f"    avg train loss: {avg_train_loss:.3f}")
             print(f"     avg eval loss: {avg_val_loss:.3f}\n")
 
+            self._training_manager.step(self._model, avg_val_accuracy)
+
+            if self._early_stopping(avg_val_loss):
+                self.finalize()
+                break
+
+    def finalize(self) -> None:
+        self._training_manager.save_final_model(self._model)
 
     def _train_epoch(self) -> Tuple[float, float]:
         self._model.train()
