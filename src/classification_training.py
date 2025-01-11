@@ -18,14 +18,13 @@ class ClassificationTraining:
                  loss_function: torch.nn.Module,
                  batch_size: int,
                  device: torch.device,
-                 random_state: int = None,
+                 random_state: int,
                  ):
         self._model_name: str = model_name
         self._model: torch.nn.Module = model
         self._optimizer: torch.optim.Optimizer = optimizer
         self._loss_func: torch.nn.Module = loss_function
         self._device: torch.device = device
-
 
         self._train_dataloader: torch.utils.data.DataLoader = DataLoader(
             train_dataset,
@@ -45,7 +44,8 @@ class ClassificationTraining:
         torch.cuda.manual_seed_all(random_state)
 
     def train(self, epochs: int) -> None:
-        pass
+        for _ in range(epochs):
+            self._train_epoch()
 
     def load_model(self, checkpoint_name: str) -> None:
         pass
@@ -58,13 +58,14 @@ class ClassificationTraining:
 
         total_train_accuracy = 0
         total_train_loss = 0
-        for batch in tqdm(self._train_dataloader):
-            batch = batch.to(self._device)
-            b_input_ids, b_input_mask, b_labels = batch
+        for b_input_tokens, b_input_mask, b_labels in tqdm(self._train_dataloader):
+            b_input_tokens = b_input_tokens.to(self._device)
+            b_input_mask = b_input_mask.to(self._device)
+            b_labels = b_labels.to(self._device)
 
             self._model.zero_grad()
 
-            probas = self._model(b_input_ids, b_input_mask)
+            probas = self._model(b_input_tokens, b_input_mask)
 
             loss = self._loss_func(probas, b_labels)
             total_train_loss += loss.item()
@@ -74,16 +75,15 @@ class ClassificationTraining:
             self._optimizer.step()
 
             logits = probas.detach().cpu().numpy()
-            label_ids = b_labels.to('cpu').numpy()
-            total_train_accuracy += accuracy(logits, label_ids)
+            label_ids = b_labels.cpu().numpy()
+            total_train_accuracy += self._accuracy(logits, label_ids)
 
         avg_train_accuracy = total_train_accuracy / len(self._train_dataloader)
-        print(" Train Accuracy: {0:.2f}".format(avg_train_accuracy))
 
         avg_train_loss = total_train_loss / len(self._train_dataloader)
 
-        print("")
-        print("  Average training loss: {0:.2f}".format(avg_train_loss))
+        print(" Train Accuracy: {0:.2f}".format(avg_train_accuracy))
+        print(" Average training loss: {0:.2f}".format(avg_train_loss))
 
 
     def _evaluate(self):

@@ -8,3 +8,6 @@
 
 # too large
 data/bm25_scored_evidence
+
+# models and checkpoints
+models/

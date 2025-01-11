@@ -12,6 +12,7 @@ def _build_import_relative_path(path: str):
 
 DATA_PATH = _build_import_relative_path("../data")
 MODELS_PATH = _build_import_relative_path("../models")
+CHECKPOINTS_RELATIVE_PATH = "checkpoints"
 
 def get_device() -> torch.device:
     if torch.cuda.is_available():
@@ -34,10 +35,6 @@ def read_json(file_path: str) -> Dict[str, str]:
         data = json.load(f)
     return data
 
-
-def save_model(model: torch.nn.Module, path: str):
-    abs_path = os.path.join(MODELS_PATH, path)
-    torch.save(model.state_dict(), abs_path)
 
 def load_model(model: torch.nn.Module, path: str):
     abs_path = os.path.join(MODELS_PATH, path)
