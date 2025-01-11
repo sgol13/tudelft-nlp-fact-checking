@@ -163,7 +163,7 @@ if __name__ == "__main__":
                         default="data/raw_data/test_claims_quantemp.json",
                         help="Path to the test data")
     parser.add_argument("--bm25_evidence_path", type=str,
-                        default="data/bm25_scored_evidence/bm25_top_100_claimdecomp.json",
+                        default="data/bm25_scored_evidence/bm25_top_100.json",
                         help="Path to the top 100 bm25 docs")
     parser.add_argument("--base_model", type=str,
                         default="roberta-large-mnli", help="Path to the base model")
