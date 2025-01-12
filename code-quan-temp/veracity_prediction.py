@@ -6,7 +6,7 @@ python3 veracity_prediction.py --test_path path to test file
 """
 import json
 import argparse
-from typing import Dict, List
+from typing import Dict, List, Any
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 import os
