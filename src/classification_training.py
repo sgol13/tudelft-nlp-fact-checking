@@ -86,7 +86,7 @@ class ClassificationTraining:
             b_input_mask = b_input_mask.to(self._device)
             b_labels = b_labels.to(self._device)
 
-            self._model.zero_grad()
+            self._optimizer.zero_grad()
 
             b_logits = self._model(b_input_tokens, b_input_mask)
 
@@ -94,7 +94,7 @@ class ClassificationTraining:
             loss.backward()
             self._optimizer.step()
 
-            total_train_accuracy += self._accuracy(b_logits, b_labels)
+            total_train_accuracy += self._accuracy(b_logits.cpu(), b_labels.cpu())
             total_train_loss += loss.item()
 
         avg_train_accuracy = total_train_accuracy / len(self._train_dataloader)
@@ -119,7 +119,7 @@ class ClassificationTraining:
 
             loss = self._loss_func(b_logits, b_labels)
 
-            total_eval_accuracy += self._accuracy(b_logits, b_labels)
+            total_eval_accuracy += self._accuracy(b_logits.cpu(), b_labels.cpu())
             total_eval_loss += loss.item()
 
         avg_val_accuracy = total_eval_accuracy / len(self._val_dataloader)
@@ -129,6 +129,6 @@ class ClassificationTraining:
 
     @staticmethod
     def _accuracy(output: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
-        pred_flat = torch.argmax(output).flatten()
+        pred_flat = torch.argmax(output, dim=1).flatten()
         labels_flat = labels.flatten()
         return torch.sum(pred_flat == labels_flat) / len(labels_flat)

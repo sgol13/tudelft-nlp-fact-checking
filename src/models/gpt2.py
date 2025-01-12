@@ -24,9 +24,11 @@ class Gpt2Classifier(nn.Module):
         super().__init__()
 
         self.gpt2 = transformers.GPT2Model.from_pretrained(
-            model_path, output_attentions=True,
+            model_path,
+            output_attentions=True,
             output_hidden_states=True,
-            attn_implementation='eager')
+            attn_implementation='eager'
+        )
 
         hidden_dim = self.gpt2.config.hidden_size
         self.mlp = nn.Sequential(
