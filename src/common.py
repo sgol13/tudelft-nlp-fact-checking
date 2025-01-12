@@ -11,7 +11,6 @@ def _build_import_relative_path(path: str):
 
 DATA_PATH = _build_import_relative_path("../data")
 MODELS_PATH = _build_import_relative_path("../models")
-CHECKPOINTS_RELATIVE_PATH = "checkpoints"
 
 def get_device() -> torch.device:
     if torch.cuda.is_available():

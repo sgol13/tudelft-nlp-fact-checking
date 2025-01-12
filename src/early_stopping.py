@@ -1,7 +1,6 @@
 class EarlyStopping:
-    def __init__(self, patience: int = 7, drop_limit: float = 0):
+    def __init__(self, patience: int = 3):
         self._patience = patience
-        self._drop_limit = drop_limit
         self._counter = 0
         self._lowest_loss = None
 
@@ -10,7 +9,7 @@ class EarlyStopping:
 
         if self._lowest_loss is None:
             self._lowest_loss = val_loss
-        elif val_loss > self._lowest_loss + self._drop_limit:
+        elif val_loss > self._lowest_loss:
             self._counter += 1
 
             print(f'Early stopping counter: {self._counter}/{self._patience}')

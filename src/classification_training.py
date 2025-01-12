@@ -18,11 +18,11 @@ class ClassificationTraining:
                  model_name: str,
                  train_dataset: torch.utils.data.TensorDataset,
                  val_dataset: torch.utils.data.TensorDataset,
-                 model: torch.nn.Module,
+                 model: nn.Module,
                  optimizer: torch.optim.Optimizer,
                  loss_function: torch.nn.Module,
                  batch_size: int,
-                 early_stopping: EarlyStopping,
+                 early_stopping_patience: int,
                  device: torch.device,
                  random_state: int,
                  ):
@@ -30,7 +30,6 @@ class ClassificationTraining:
         self._model: torch.nn.Module = model
         self._optimizer: torch.optim.Optimizer = optimizer
         self._loss_func: torch.nn.Module = loss_function
-        self._early_stopping: EarlyStopping = early_stopping
         self._device: torch.device = device
 
         self._train_dataloader: torch.utils.data.DataLoader = DataLoader(
@@ -50,12 +49,14 @@ class ClassificationTraining:
         torch.manual_seed(random_state)
         torch.cuda.manual_seed_all(random_state)
 
-        self._training_manager = TrainingManager(model_name)
+        self._training_manager = TrainingManager(model_name, keep_last_checkpoints=early_stopping_patience)
         self._training_manager.start_training(model)
+
+        self._early_stopping: EarlyStopping = EarlyStopping(early_stopping_patience)
 
     def train(self, epochs: int) -> None:
         for _ in range(epochs):
-            print(f"\nEPOCH {self._training_manager.epochs}")
+            print(f"\nEPOCH {self._training_manager.epoch_num}")
 
             avg_train_accuracy, avg_train_loss = self._train_epoch()
             avg_val_accuracy, avg_val_loss = self._evaluate()
@@ -72,7 +73,7 @@ class ClassificationTraining:
                 break
 
     def finalize(self) -> None:
-        self._training_manager.save_final_model(self._model)
+        self._training_manager.finalize(self._model)
 
     def _train_epoch(self) -> Tuple[float, float]:
         self._model.train()
