@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional
 
 import torch
 import numpy as np
@@ -22,7 +22,6 @@ class ClassificationTraining:
                  optimizer: torch.optim.Optimizer,
                  loss_function: torch.nn.Module,
                  batch_size: int,
-                 early_stopping_patience: int,
                  device: torch.device,
                  random_state: int,
                  ):
@@ -49,30 +48,53 @@ class ClassificationTraining:
         torch.manual_seed(random_state)
         torch.cuda.manual_seed_all(random_state)
 
-        self._checkpoint_manager = CheckpointsManager(model_name, keep_last_checkpoints=early_stopping_patience)
-        self._checkpoint_manager.start_training(model)
+        self._checkpoint_manager = CheckpointsManager(model_name)
+        self._early_stopping: Optional[EarlyStopping] = None
 
-        self._early_stopping: EarlyStopping = EarlyStopping(early_stopping_patience)
+        self._epoch: Optional[int] = None
+        self._allow_new_training: bool = False
 
     def start_new_training(self) -> None:
-        # start_new_training()
-        pass
+        self._checkpoint_manager.clear_model_dir()
+        self._epoch = 1
+        self._allow_new_training = True
+        print("Starting new training from epoch 1")
 
     def resume_training(self) -> None:
-        # load_last_checkpoint()
-        pass
+        last_checkpoint = self._checkpoint_manager.load_last_checkpoint()
+        assert last_checkpoint, "No checkpoint found."
 
-    def select_final_model(self) -> None:
-        # select_final_model()
-        pass
+        weights, last_epoch = last_checkpoint
+        self._epoch = last_epoch + 1
+        self._allow_new_training = True
+        print(f"Resuming training from epoch {self._epoch}")
 
-    def load_final_model(self) -> None:
-        # load_final_model()
-        pass
+    def load_best_model(self) -> None:
+        weights = self._checkpoint_manager.load_best_model()
+        assert weights, "No best model found."
 
-    def train(self, epochs: int) -> None:
+        self._model.load_state_dict(weights)
+        self._allow_new_training = False
+
+    def load_model(self, name: str) -> None:
+        weights = self._checkpoint_manager.load_model(name)
+        assert weights, f"Model {name} not found."
+
+        self._model.load_state_dict(weights)
+        self._allow_new_training = False
+
+    def store_best_model(self) -> None:
+        self._checkpoint_manager.store_best_model()
+
+    def train(self, epochs: int, patience: int=None) -> None:
+        if patience:
+            self._early_stopping = EarlyStopping(patience)
+
+        assert self._allow_new_training, (
+            "Incorrect state: training is not allowed. Start new training or resume from the last checkpoint.")
+
         for _ in range(epochs):
-            print(f"\nEPOCH {self._checkpoint_manager.epoch_num}")
+            print(f"\nEPOCH {self._epoch}")
 
             avg_train_accuracy, avg_train_loss = self._train_epoch()
             avg_val_accuracy, avg_val_loss = self._evaluate()
@@ -82,10 +104,10 @@ class ClassificationTraining:
             print(f"    avg train loss: {avg_train_loss:.3f}")
             print(f"     avg eval loss: {avg_val_loss:.3f}\n")
 
-            self._checkpoint_manager.step(self._model, avg_val_accuracy)
+            self._checkpoint_manager.save_checkpoint(self._model.state_dict(), self._epoch, avg_val_accuracy)
 
-            if self._early_stopping(avg_val_loss):
-                self.finalize()
+            self._epoch += 1
+            if self._early_stopping and self._early_stopping(avg_val_loss):
                 break
 
     def _train_epoch(self) -> Tuple[float, float]:
@@ -114,7 +136,6 @@ class ClassificationTraining:
         avg_train_loss = total_train_loss / len(self._train_dataloader)
 
         return avg_train_accuracy, avg_train_loss
-
 
     def _evaluate(self) -> Tuple[float, float]:
         self._model.eval()
