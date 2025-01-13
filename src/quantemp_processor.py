@@ -1,14 +1,11 @@
-from typing import List, Dict, Callable, Tuple, Union
+from typing import List, Callable, Tuple
 
 import torch
 from sklearn.preprocessing import LabelEncoder
 from torch.utils.data import TensorDataset
 from tqdm.auto import tqdm
 
-QTFact = Dict[str, Union[str, List]]
-QTDataset = List[QTFact]
-
-QT_VERACITY_LABELS = ['Conflicting', 'False', 'True']
+from src.common import QT_VERACITY_LABELS, QTDataset, QTClaim
 
 qt_veracity_label_encoder = LabelEncoder()
 qt_veracity_label_encoder.fit(QT_VERACITY_LABELS)
@@ -43,11 +40,11 @@ class QuantempProcessor:
 
     @staticmethod
     def _extract_labels(dataset: QTDataset) -> List[str]:
-        return [fact['label'] for fact in dataset]
+        return [claim['label'] for claim in dataset]
 
     def _extract_features(self, dataset: QTDataset) -> List[str]:
         get_feature = self._get_feature_from_claim_decomposition if self._claim_decomposition else self._get_feature_from_doc
-        return [get_feature(fact) for fact in dataset]
+        return [get_feature(claim) for claim in dataset]
 
     @staticmethod
     def _encode_labels(labels: List[str]) -> torch.Tensor:
@@ -65,13 +62,13 @@ class QuantempProcessor:
         return torch.cat(input_tokens), torch.cat(attention_masks)
 
     @staticmethod
-    def _get_feature_from_doc(fact: QTFact) -> str:
-        claim = fact["claim"]
-        feature = "[Claim]:" + claim + "[Evidences]:" + fact["doc"]
+    def _get_feature_from_doc(claim: QTClaim) -> str:
+        claim = claim["claim"]
+        feature = "[Claim]:" + claim + "[Evidences]:" + claim["doc"]
         return feature
 
     @staticmethod
-    def _get_feature_from_claim_decomposition(fact: QTFact) -> str:
+    def _get_feature_from_claim_decomposition(fact: QTClaim) -> str:
         claim = fact["claim"]
 
         evidences = []
