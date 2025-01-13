@@ -16,8 +16,7 @@ MODELS_PATH = _build_import_relative_path("../models")
 
 QTClaim = Dict[str, Union[
     str,
-    List[str], # decomposed questions / evidences for claim (no decomposition)
-    List[Dict[str, Union[str, List[str]]]] # questions with evidences
+    List[str], # subquestions / evidences / top100evidences
 ]]
 QTDataset = List[QTClaim]
 
@@ -40,13 +39,15 @@ def get_device() -> torch.device:
     return device
 
 
-def read_json(file_path) -> Dict[str, Any]:
-    with open(file_path, "r") as f:
+def read_data(path) -> Dict[str, Any]:
+    abs_path = os.path.join(DATA_PATH, path)
+    with open(abs_path, "r") as f:
         return json.load(f)
 
 
-def save_json(file_path: str, data: Dict[str, Any]) -> None:
-    with open(file_path, "w") as f:
+def save_data(path, data: Dict[str, Any]) -> None:
+    abs_path = os.path.join(DATA_PATH, path)
+    with open(abs_path, "w") as f:
         json.dump(data, f, indent=4)
 
 

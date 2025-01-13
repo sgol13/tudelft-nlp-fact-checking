@@ -1,11 +1,11 @@
-from typing import List, Dict, Union
+from typing import List
 
-import torch
+import numpy as np
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from tqdm.auto import tqdm
-from src.common import QTDataset
+from src.common import QTDataset, QTClaim
 
 
 class EvidenceProcessor:
@@ -13,51 +13,36 @@ class EvidenceProcessor:
 
     def __init__(self, decomposed: bool, top_k: int):
         self._decomposed = decomposed
-        self._top_k = top_k
         self._embedding_model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
 
     def transform(self, dataset: QTDataset) -> QTDataset:
         for claim in tqdm(dataset):
-            evidences = claim['top100evidences']
-            if self._decomposed:
-                assert 'questions' in claim, "No questions found but decomposed=True"
-                questions = claim['questions']
-                claim['evidences'] = self._find_similar_to_decomposed_questions(questions, evidences)
-            else:
-                claim['evidences'] = self._find_similar_to_claim(claim['claim'], evidences)
+            sentences = claim['subquestions'] if self._decomposed else [claim['claim']]
+            claim['evidences'] = self._find_similar_evidences(sentences, claim['top100evidences'])
+
+            del claim['top100evidences']
+            if 'doc' in claim:
+                del claim['doc']
 
         return dataset
 
-    def _find_similar_to_claim(self, claim: str, evidences: List[str]) -> List[str]:
-        claim_emb = self._embedding_model.encode(claim)
-        return self._find_similar_evidences(claim, evidences, claim_emb)
+    def _find_similar_evidences(self, sentences: List[str], all_evidences: List[str]) -> List[str]:
+        doc_embs = self._embedding_model.encode(all_evidences)
+        sent_embs = self._embedding_model.encode(sentences)
 
-    def _find_similar_to_decomposed_questions(self, questions: List[str], evidences: List[str]) -> List[
-        Dict[str, Union[str, List[str]]]]:
-        questions_with_evidences = []
-        for question in questions:
-            evidence_embeddings = self._embedding_model.encode(evidences)
-            top_evidences = self._find_similar_evidences(question, evidences, evidence_embeddings)
+        text_sims = cosine_similarity(doc_embs, sent_embs) # shape (100 x #subquestions) for the similarity between each of 100 sources and each subquestion
 
-            questions_with_evidences.append({
-                "questions": question,
-                "top_k_doc": top_evidences
-            })
+        # Get top3 evidences for each subquestion and their scores
+        potential_evidences = text_sims.argsort(axis=0)[-3:, :]
+        potential_evidences_scored = np.sort(text_sims, axis=0)[-3:, :]
 
-        return questions_with_evidences
+        # Get final 0-5 evidences between all subquestions that are not the same but have a similarity score of higher than 0.5
+        final_evidences = list(set(potential_evidences[-1, :][potential_evidences_scored[-1, :] > 0.5].tolist()))
+        if len(final_evidences) < 3:
+            final_evidences += list(set(potential_evidences[-2, :][potential_evidences_scored[-2, :] > 0.5].tolist()))
+            if len(final_evidences) < 3:
+                final_evidences += list(set(potential_evidences[-3, :][potential_evidences_scored[-3, :] > 0.5].tolist()))
 
-    def _find_similar_evidences(self, sentence: str, evidences: List[str], evidence_embeddings: torch.Tensor) -> List[
-        str]:
-        sentence_emb = self._embedding_model.encode(sentence)
-
-        evidence_similarities = cosine_similarity(evidence_embeddings, [sentence_emb]).tolist()
-
-        numbered_similarities = zip(range(len(evidence_similarities)), evidence_similarities)
-        sorted_similarities = sorted(numbered_similarities, key=lambda x: x[1], reverse=True)
-
-        top_evidences = []
-        for idx, item in sorted_similarities[:self._top_k]:
-            if item[0] > self._SIMILARITY_THRESHOLD:
-                top_evidences.append(evidences[idx])
-
-        return top_evidences
+        # get the actual contents of the final evidences
+        selected_evidences = [all_evidences[i] for i in final_evidences]
+        return selected_evidences
