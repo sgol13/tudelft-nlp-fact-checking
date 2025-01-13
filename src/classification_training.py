@@ -8,6 +8,7 @@ from torch import nn
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm.auto import tqdm
 
+from src.common import QTDataset
 from src.early_stopping import EarlyStopping
 from src.checkpoint_manager import CheckpointsManager
 from src.stats_manager import StatsManager
@@ -32,17 +33,8 @@ class ClassificationTraining:
         self._loss_func: torch.nn.Module = loss_function
         self._device: torch.device = device
 
-        self._train_dataloader: torch.utils.data.DataLoader = DataLoader(
-            train_dataset,
-            sampler=RandomSampler(train_dataset),
-            batch_size=batch_size
-        )
-
-        self._val_dataloader: torch.utils.data.DataLoader = DataLoader(
-            val_dataset,
-            sampler=SequentialSampler(val_dataset),
-            batch_size=batch_size
-        )
+        self._train_dataloader: torch.utils.data.DataLoader = DataLoader(train_dataset, sampler=RandomSampler(train_dataset), batch_size=batch_size)
+        self._val_dataloader: torch.utils.data.DataLoader = DataLoader(val_dataset, sampler=SequentialSampler(val_dataset), batch_size=batch_size)
 
         random.seed(random_state)
         np.random.seed(random_state)
@@ -102,7 +94,7 @@ class ClassificationTraining:
             print(f"\nEPOCH {self._epoch}")
 
             train_stats = self._train_epoch()
-            val_stats = self._evaluate()
+            val_stats = self._validate()
 
             self._stats_manager.update({"epoch": self._epoch} | train_stats | val_stats)
             self._stats_manager.print_current_epoch()
@@ -117,6 +109,24 @@ class ClassificationTraining:
 
     def plot_stats(self) -> None:
         self._stats_manager.plot()
+
+    def predict(self, dataset: torch.utils.data.TensorDataset) -> List[int]:
+        self._model.eval()
+
+        dataloader = DataLoader(dataset, sampler=SequentialSampler(dataset), batch_size=64, drop_last=False)
+
+        predictions = []
+        for b_input_tokens, b_input_mask, _ in tqdm(dataloader):
+            b_input_tokens = b_input_tokens.to(self._device)
+            b_input_mask = b_input_mask.to(self._device)
+
+            with torch.no_grad():
+                b_logits = self._model(b_input_tokens, b_input_mask)
+
+            b_predictions = torch.argmax(b_logits, dim=1).flatten()
+            predictions.extend(b_predictions.cpu().tolist())
+
+        return predictions
 
     def _train_epoch(self) -> Dict[str, Union[float, List[float]]]:
         self._model.train()
@@ -148,13 +158,13 @@ class ClassificationTraining:
             "train_loss_batches": train_loss_batches
         }
 
-    def _evaluate(self) -> Dict[str, float]:
+    def _validate(self) -> Dict[str, float]:
         self._model.eval()
 
-        total_eval_accuracy = 0
-        total_eval_loss = 0
+        total_val_accuracy = 0
+        total_val_loss = 0
 
-        for b_input_tokens, b_input_mask, b_labels in tqdm(self._val_dataloader, desc='eval'):
+        for b_input_tokens, b_input_mask, b_labels in tqdm(self._val_dataloader, desc='val'):
             b_input_tokens = b_input_tokens.to(self._device)
             b_input_mask = b_input_mask.to(self._device)
             b_labels = b_labels.to(self._device)
@@ -164,12 +174,12 @@ class ClassificationTraining:
 
             loss = self._loss_func(b_logits, b_labels)
 
-            total_eval_accuracy += self._accuracy(b_logits.cpu(), b_labels.cpu())
-            total_eval_loss += loss.item()
+            total_val_accuracy += self._accuracy(b_logits.cpu(), b_labels.cpu())
+            total_val_loss += loss.item()
 
         return {
-            "val_accuracy": total_eval_accuracy / len(self._val_dataloader),
-            "val_loss": total_eval_loss / len(self._val_dataloader),
+            "val_accuracy": total_val_accuracy / len(self._val_dataloader),
+            "val_loss": total_val_loss / len(self._val_dataloader),
         }
 
     @staticmethod

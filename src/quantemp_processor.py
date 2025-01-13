@@ -10,19 +10,54 @@ from src.common import QT_VERACITY_LABELS, QTDataset, QTClaim
 qt_veracity_label_encoder = LabelEncoder()
 qt_veracity_label_encoder.fit(QT_VERACITY_LABELS)
 
+
 # don't let anyone tamper with the label encoder
 def _disable_method(*args, **kwargs):
     raise RuntimeError("Please, don't try to fit the label encoder again.")
+
+
 qt_veracity_label_encoder.fit = _disable_method
 qt_veracity_label_encoder.fit_transform = _disable_method
 
+
+def _get_feature_from_doc(claim: QTClaim) -> str:
+    return (
+            "[Claim]:" + claim["claim"] +
+            "[Evidences]:" + claim["doc"]
+    )
+
+
+def _get_feature_no_decomposition(claim: QTClaim) -> str:
+    evidences = claim['evidences']
+    return (
+        "[Claim]:" + claim["claim"] +
+        ("[Evidences]:" + " ".join(evidences) if evidences else '')
+    )
+
+
+def _get_feature_claim_decomposition(claim: QTClaim) -> str:
+    evidences = claim['evidences']
+    return (
+        "[Claim]:" + claim["claim"] +
+        "[Questions]:" + " ".join(claim['subquestions']) +
+        ("[Evidences]:" + " ".join(evidences) if evidences else '')
+    )
+
+
 class QuantempProcessor:
+    _MODES = {
+        'decomposition': _get_feature_claim_decomposition,
+        'no_decomposition': _get_feature_no_decomposition,
+        'doc': _get_feature_from_doc
+    }
+
     def __init__(self,
                  tokenizer: Callable[[str], Tuple[torch.Tensor, torch.Tensor]],
-                 claim_decomposition=False,
+                 evidence_mode: str
                  ):
         self._tokenizer = tokenizer
-        self._claim_decomposition = claim_decomposition
+        self._evidence_mode = evidence_mode
+        assert self._evidence_mode in self._MODES, f"Invalid evidence, must be one of {self._MODES}"
 
     def transform(self, dataset: QTDataset) -> TensorDataset:
         features: List[str] = self._extract_features(dataset)
@@ -43,7 +78,7 @@ class QuantempProcessor:
         return [claim['label'] for claim in dataset]
 
     def _extract_features(self, dataset: QTDataset) -> List[str]:
-        get_feature = self._get_feature_from_claim_decomposition if self._claim_decomposition else self._get_feature_from_doc
+        get_feature = self._MODES[self._evidence_mode]
         return [get_feature(claim) for claim in dataset]
 
     @staticmethod
@@ -60,25 +95,3 @@ class QuantempProcessor:
             attention_masks.append(attention_mask)
 
         return torch.cat(input_tokens), torch.cat(attention_masks)
-
-    @staticmethod
-    def _get_feature_from_doc(claim: QTClaim) -> str:
-        claim = claim["claim"]
-        feature = "[Claim]:" + claim + "[Evidences]:" + claim["doc"]
-        return feature
-
-    @staticmethod
-    def _get_feature_from_claim_decomposition(fact: QTClaim) -> str:
-        claim = fact["claim"]
-
-        evidences = []
-        questions = []
-        for question in fact["evidences"]:
-            if len(question["top_k_doc"]) > 0:
-                evidences.append(question["top_k_doc"][0])
-            questions.append(question["questions"])
-
-        questions = list(set(questions))
-        evidences = list(set(evidences))
-        feature = "[Claim]:" + claim + "[Questions]:" + " ".join(questions) + "[Evidences]:" + " ".join(evidences)
-        return feature

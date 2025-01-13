@@ -9,7 +9,7 @@ from src.common import QTDataset, QTClaim
 
 
 class EvidenceProcessor:
-    _SIMILARITY_THRESHOLD = 0.5
+    _THRESHOLD = 0.1
 
     def __init__(self, decomposed: bool, top_k: int):
         self._decomposed = decomposed
@@ -27,21 +27,25 @@ class EvidenceProcessor:
         return dataset
 
     def _find_similar_evidences(self, sentences: List[str], all_evidences: List[str]) -> List[str]:
+        if not sentences:
+            return []
+
         doc_embs = self._embedding_model.encode(all_evidences)
         sent_embs = self._embedding_model.encode(sentences)
 
         text_sims = cosine_similarity(doc_embs, sent_embs) # shape (100 x #subquestions) for the similarity between each of 100 sources and each subquestion
-
+        print(text_sims)
         # Get top3 evidences for each subquestion and their scores
         potential_evidences = text_sims.argsort(axis=0)[-3:, :]
         potential_evidences_scored = np.sort(text_sims, axis=0)[-3:, :]
 
+        print(potential_evidences_scored)
         # Get final 0-5 evidences between all subquestions that are not the same but have a similarity score of higher than 0.5
-        final_evidences = list(set(potential_evidences[-1, :][potential_evidences_scored[-1, :] > 0.5].tolist()))
+        final_evidences = list(set(potential_evidences[-1, :][potential_evidences_scored[-1, :] > self._THRESHOLD].tolist()))
         if len(final_evidences) < 3:
-            final_evidences += list(set(potential_evidences[-2, :][potential_evidences_scored[-2, :] > 0.5].tolist()))
+            final_evidences += list(set(potential_evidences[-2, :][potential_evidences_scored[-2, :] > self._THRESHOLD].tolist()))
             if len(final_evidences) < 3:
-                final_evidences += list(set(potential_evidences[-3, :][potential_evidences_scored[-3, :] > 0.5].tolist()))
+                final_evidences += list(set(potential_evidences[-3, :][potential_evidences_scored[-3, :] > self._THRESHOLD].tolist()))
 
         # get the actual contents of the final evidences
         selected_evidences = [all_evidences[i] for i in final_evidences]
