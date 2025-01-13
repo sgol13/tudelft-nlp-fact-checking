@@ -1,4 +1,4 @@
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Dict, Union, List
 
 import torch
 import numpy as np
@@ -10,6 +10,7 @@ from tqdm.auto import tqdm
 
 from src.early_stopping import EarlyStopping
 from src.checkpoint_manager import CheckpointsManager
+from src.stats_manager import StatsManager
 
 
 class ClassificationTraining:
@@ -48,7 +49,8 @@ class ClassificationTraining:
         torch.manual_seed(random_state)
         torch.cuda.manual_seed_all(random_state)
 
-        self._checkpoint_manager = CheckpointsManager(model_name)
+        self._checkpoint_manager: CheckpointsManager = CheckpointsManager(model_name)
+        self._stats_manager: StatsManager = StatsManager(model_name)
         self._early_stopping: Optional[EarlyStopping] = None
 
         self._epoch: Optional[int] = None
@@ -56,6 +58,8 @@ class ClassificationTraining:
 
     def start_new_training(self) -> None:
         self._checkpoint_manager.clear_model_dir()
+        self._stats_manager.clear()
+
         self._epoch = 1
         self._allow_new_training = True
         print("Starting new training from epoch 1")
@@ -63,6 +67,7 @@ class ClassificationTraining:
     def resume_training(self) -> None:
         last_checkpoint = self._checkpoint_manager.load_last_checkpoint()
         assert last_checkpoint, "No checkpoint found."
+        self._stats_manager.load()
 
         weights, last_epoch = last_checkpoint
         self._epoch = last_epoch + 1
@@ -96,25 +101,27 @@ class ClassificationTraining:
         for _ in range(epochs):
             print(f"\nEPOCH {self._epoch}")
 
-            avg_train_accuracy, avg_train_loss = self._train_epoch()
-            avg_val_accuracy, avg_val_loss = self._evaluate()
+            train_stats = self._train_epoch()
+            val_stats = self._evaluate()
 
-            print(f"    train accuracy: {avg_train_accuracy:.3f}")
-            print(f"     eval accuracy: {avg_val_accuracy:.3f}\n")
-            print(f"    avg train loss: {avg_train_loss:.3f}")
-            print(f"     avg eval loss: {avg_val_loss:.3f}\n")
+            self._stats_manager.update({"epoch": self._epoch} | train_stats | val_stats)
+            self._stats_manager.print_current_epoch()
 
-            self._checkpoint_manager.save_checkpoint(self._model.state_dict(), self._epoch, avg_val_accuracy)
+            self._checkpoint_manager.save_checkpoint(self._model.state_dict(), self._epoch, val_stats["val_accuracy"])
 
             self._epoch += 1
-            if self._early_stopping and self._early_stopping(avg_val_loss):
+            if self._early_stopping and self._early_stopping(val_stats["val_loss"]):
                 break
 
-    def _train_epoch(self) -> Tuple[float, float]:
+            self._stats_manager.plot()
+
+
+    def _train_epoch(self) -> Dict[str, Union[float, List[float]]]:
         self._model.train()
 
         total_train_accuracy = 0
         total_train_loss = 0
+        train_loss_batches = []
 
         for b_input_tokens, b_input_mask, b_labels in tqdm(self._train_dataloader, desc='train'):
             b_input_tokens = b_input_tokens.to(self._device)
@@ -131,13 +138,15 @@ class ClassificationTraining:
 
             total_train_accuracy += self._accuracy(b_logits.cpu(), b_labels.cpu())
             total_train_loss += loss.item()
+            train_loss_batches.append(loss.item())
 
-        avg_train_accuracy = total_train_accuracy / len(self._train_dataloader)
-        avg_train_loss = total_train_loss / len(self._train_dataloader)
+        return {
+            "train_accuracy": total_train_accuracy / len(self._train_dataloader),
+            "train_loss": total_train_loss / len(self._train_dataloader),
+            "train_loss_batches": train_loss_batches
+        }
 
-        return avg_train_accuracy, avg_train_loss
-
-    def _evaluate(self) -> Tuple[float, float]:
+    def _evaluate(self) -> Dict[str, float]:
         self._model.eval()
 
         total_eval_accuracy = 0
@@ -156,13 +165,13 @@ class ClassificationTraining:
             total_eval_accuracy += self._accuracy(b_logits.cpu(), b_labels.cpu())
             total_eval_loss += loss.item()
 
-        avg_val_accuracy = total_eval_accuracy / len(self._val_dataloader)
-        avg_val_loss = total_eval_loss / len(self._val_dataloader)
-
-        return avg_val_accuracy, avg_val_loss
+        return {
+            "val_accuracy": total_eval_accuracy / len(self._val_dataloader),
+            "val_loss": total_eval_loss / len(self._val_dataloader),
+        }
 
     @staticmethod
-    def _accuracy(output: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
+    def _accuracy(output: torch.Tensor, labels: torch.Tensor) -> float:
         pred_flat = torch.argmax(output, dim=1).flatten()
         labels_flat = labels.flatten()
-        return torch.sum(pred_flat == labels_flat) / len(labels_flat)
+        return torch.sum(pred_flat == labels_flat).item() / len(labels_flat)

@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Any
 
 import torch
 import json
@@ -28,11 +28,9 @@ def get_device() -> torch.device:
     return device
 
 
-def read_json(file_path: str) -> Dict[str, str]:
+def read_json(file_path: str) -> Dict[str, Any]:
     with open(file_path, "r") as f:
-        data = json.load(f)
-    return data
-
+        return json.load(f)
 
 def cwd_relative_path(abs_path: str) -> str:
     cwd = os.getcwd()
