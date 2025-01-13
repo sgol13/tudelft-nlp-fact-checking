@@ -115,6 +115,8 @@ class ClassificationTraining:
 
             self._stats_manager.plot()
 
+    def plot_stats(self) -> None:
+        self._stats_manager.plot()
 
     def _train_epoch(self) -> Dict[str, Union[float, List[float]]]:
         self._model.train()

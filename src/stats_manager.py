@@ -38,36 +38,35 @@ class StatsManager:
         print(f"   eval:  {epoch_stats['val_loss']:.3f} | {100*epoch_stats['val_accuracy']:.2f}")
 
     def plot(self):
+        xticks = range(1, max(10, len(self._stats)))
+
         epochs = [stat['epoch'] for stat in self._stats]
         train_accuracies = [stat['train_accuracy'] for stat in self._stats]
         val_accuracies = [stat['val_accuracy'] for stat in self._stats]
         train_losses = [stat['train_loss'] for stat in self._stats]
         val_losses = [stat['val_loss'] for stat in self._stats]
 
-        fig, axs = plt.subplots(2, 1, figsize=(10, 6), constrained_layout=True)
+        fig, axs = plt.subplots(2, 1, figsize=(8, 5), constrained_layout=True)
 
-        # Plot accuracy
+        for stat in self._stats[1:]:
+            batch_losses = stat.get('train_loss_batches', [])
+            if batch_losses:
+                batch_epochs = [stat['epoch'] - 1 + i / len(batch_losses) for i in range(len(batch_losses))]
+                axs[1].scatter(batch_epochs, batch_losses, color='blue', alpha=0.3, s=1)
+
         axs[0].plot(epochs, train_accuracies, label='train accuracy', marker='o')
         axs[0].plot(epochs, val_accuracies, label='val accuracy', marker='o')
         axs[0].set_ylabel('Accuracy', fontsize=14)
         axs[0].legend()
         axs[0].grid(True)
-
-        # Plot loss
-        # Plot batch-wise training loss
-        for stat in self._stats:
-            batch_losses = stat.get('train_loss_batches', [])
-            if batch_losses:
-                batch_epochs = [stat['epoch'] + i / len(batch_losses) for i in range(len(batch_losses))]
-                axs[1].scatter(batch_epochs, batch_losses, color='blue', alpha=0.3, s=1)
+        axs[0].set_xticks(xticks)
 
         axs[1].plot(epochs, train_losses, label='train loss', marker='o')
         axs[1].plot(epochs, val_losses, label='val loss', marker='o')
         axs[1].set_ylabel('Loss', fontsize=14)
         axs[1].legend()
         axs[1].grid(True)
-
-
+        axs[1].set_xticks(xticks)
 
         plt.show()
 
