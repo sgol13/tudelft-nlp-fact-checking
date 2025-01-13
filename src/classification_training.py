@@ -123,8 +123,8 @@ class ClassificationTraining:
             with torch.no_grad():
                 b_logits = self._model(b_input_tokens, b_input_mask)
 
-            b_predictions = torch.argmax(b_logits, dim=1).flatten()
-            predictions.extend(b_predictions.cpu().tolist())
+            b_predictions = torch.argmax(b_logits, dim=1).flatten().cpu().tolist()
+            predictions.extend(b_predictions)
 
         return predictions
 

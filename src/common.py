@@ -3,7 +3,11 @@ from typing import Dict, Any, Union, List
 import torch
 import json
 import os
+import warnings
 
+from sklearn.exceptions import UndefinedMetricWarning
+
+warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
 def _build_import_relative_path(path: str):
     this_dir_abs_path = os.path.dirname(os.path.abspath(__file__))
