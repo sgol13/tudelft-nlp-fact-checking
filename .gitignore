@@ -6,8 +6,7 @@
 .tmp.drivedownload
 .tmp.driveupload
 
-# too large
-data/bm25_scored_evidence
-
 # models and checkpoints
 models/
+output/
+data/

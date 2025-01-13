@@ -4,8 +4,11 @@ import torch
 import json
 import os
 import warnings
+import pandas as pd
 
 from sklearn.exceptions import UndefinedMetricWarning
+
+from src.quantemp_processor import qt_veracity_label_encoder
 
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
@@ -17,6 +20,7 @@ def _build_import_relative_path(path: str):
 
 DATA_PATH = _build_import_relative_path("../data")
 MODELS_PATH = _build_import_relative_path("../models")
+OUTPUT_PATH = _build_import_relative_path("../output")
 
 QTClaim = Dict[str, Union[
     str,
@@ -58,3 +62,13 @@ def save_data(path, data: Dict[str, Any]) -> None:
 def cwd_relative_path(abs_path: str) -> str:
     cwd = os.getcwd()
     return os.path.relpath(abs_path, cwd)
+
+
+def save_predictions(path, claims: QTDataset, predictions: List[int]) -> None:
+    abs_path = os.path.join(OUTPUT_PATH, path)
+    df = pd.DataFrame({
+        "claim": [claim["claim"] for claim in claims],
+        "verdict": qt_veracity_label_encoder.inverse_transform(predictions)
+    })
+    df.to_csv(abs_path, index=False)
+    print(f"Saved to {cwd_relative_path(abs_path)}")
