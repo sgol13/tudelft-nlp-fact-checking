@@ -45,7 +45,7 @@ def _get_feature_claim_decomposition(claim: QTClaim) -> str:
 
 
 class QuantempProcessor:
-    _MODES = {
+    _DECOMPOSITION_MODES = {
         'decomposition': _get_feature_claim_decomposition,
         'no_decomposition': _get_feature_no_decomposition,
         'doc': _get_feature_from_doc
@@ -53,11 +53,11 @@ class QuantempProcessor:
 
     def __init__(self,
                  tokenizer: Callable[[str], Tuple[torch.Tensor, torch.Tensor]],
-                 evidence_mode: str
+                 decomposition: str
                  ):
         self._tokenizer = tokenizer
-        self._evidence_mode = evidence_mode
-        assert self._evidence_mode in self._MODES, f"Invalid evidence, must be one of {self._MODES}"
+        self._decomposition_mode = decomposition
+        assert self._decomposition_mode in self._DECOMPOSITION_MODES, f"Invalid evidence, must be one of {self._DECOMPOSITION_MODES}"
 
     def transform(self, dataset: QTDataset) -> TensorDataset:
         features: List[str] = self._extract_features(dataset)
@@ -78,7 +78,7 @@ class QuantempProcessor:
         return [claim['label'] for claim in dataset]
 
     def _extract_features(self, dataset: QTDataset) -> List[str]:
-        get_feature = self._MODES[self._evidence_mode]
+        get_feature = self._DECOMPOSITION_MODES[self._decomposition_mode]
         return [get_feature(claim) for claim in dataset]
 
     @staticmethod

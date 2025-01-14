@@ -1,16 +1,21 @@
-from typing import Tuple, Optional, Dict, Union, List
+import os
+from typing import Optional, Dict, Union, List
 
+import pandas as pd
 import torch
 import numpy as np
 import random
 
+from sklearn.metrics import accuracy_score
 from torch import nn
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from tqdm.auto import tqdm
 
-from src.common import QTDataset
+from src.common import QTDataset, OUTPUT_PATH, cwd_relative_path
 from src.early_stopping import EarlyStopping
 from src.checkpoint_manager import CheckpointsManager
+from src.f1_evaluation import calculate_f1_scores
+from src.quantemp_processor import qt_veracity_label_encoder
 from src.stats_manager import StatsManager
 
 
@@ -66,12 +71,15 @@ class ClassificationTraining:
         self._allow_new_training = True
         print(f"Resuming training from epoch {self._epoch}")
 
-    def load_best_model(self) -> None:
-        weights = self._checkpoint_manager.load_best_model()
-        assert weights, "No best model found."
+    def load_best_model(self) -> int:
+        best_model = self._checkpoint_manager.load_best_model()
+        assert best_model, "No best model found."
+        self._stats_manager.load()
 
+        weights, best_epoch = best_model
         self._model.load_state_dict(weights)
         self._allow_new_training = False
+        return best_epoch
 
     def load_model(self, name: str) -> None:
         weights = self._checkpoint_manager.load_model(name)
@@ -110,23 +118,30 @@ class ClassificationTraining:
     def plot_stats(self) -> None:
         self._stats_manager.plot()
 
-    def predict(self, dataset: torch.utils.data.TensorDataset) -> List[int]:
-        self._model.eval()
+    def evaluate_best_model(self, test_claims: QTDataset, test_dataset: torch.utils.data.TensorDataset) -> None:
+        epoch = self.load_best_model()
 
-        dataloader = DataLoader(dataset, sampler=SequentialSampler(dataset), batch_size=64, drop_last=False)
+        predictions = self._predict(test_dataset)
+        test_accuracy = self._accuracy(test_dataset.tensors[2], torch.tensor(predictions))
 
-        predictions = []
-        for b_input_tokens, b_input_mask, _ in tqdm(dataloader):
-            b_input_tokens = b_input_tokens.to(self._device)
-            b_input_mask = b_input_mask.to(self._device)
+        stats = self._stats_manager.get_epoch_stats(epoch)
+        f1_scores: List[float] = calculate_f1_scores(test_claims, predictions)
 
-            with torch.no_grad():
-                b_logits = self._model(b_input_tokens, b_input_mask)
+        # save output stats
+        table_row = [epoch, stats['train_accuracy'], stats['val_accuracy'], test_accuracy] + f1_scores
+        with open(os.path.join(OUTPUT_PATH, f'{self._model_name}.txt'), 'w') as file:
+            file.write(f"{table_row[0]} ")
+            file.write(" ".join(f"{x:.2f}" for x in table_row[1:]))
 
-            b_predictions = torch.argmax(b_logits, dim=1).flatten().cpu().tolist()
-            predictions.extend(b_predictions)
+        # save predictions
+        df = pd.DataFrame({
+            "claim": [claim["claim"] for claim in test_claims],
+            "verdict": qt_veracity_label_encoder.inverse_transform(predictions)
+        })
+        abs_path = os.path.join(OUTPUT_PATH, f'{self._model_name}.csv')
+        df.to_csv(abs_path, index=False)
+        print(f"Saved to {cwd_relative_path(abs_path)}/txt")
 
-        return predictions
 
     def _train_epoch(self) -> Dict[str, Union[float, List[float]]]:
         self._model.train()
@@ -182,8 +197,28 @@ class ClassificationTraining:
             "val_loss": total_val_loss / len(self._val_dataloader),
         }
 
+    def _predict(self, dataset: torch.utils.data.TensorDataset) -> List[int]:
+        self._model.eval()
+
+        dataloader = DataLoader(dataset, sampler=SequentialSampler(dataset), batch_size=64, drop_last=False)
+
+        predictions = []
+        for b_input_tokens, b_input_mask, _ in tqdm(dataloader):
+            b_input_tokens = b_input_tokens.to(self._device)
+            b_input_mask = b_input_mask.to(self._device)
+
+            with torch.no_grad():
+                b_logits = self._model(b_input_tokens, b_input_mask)
+
+            b_predictions = torch.argmax(b_logits, dim=1).flatten().cpu().tolist()
+            predictions.extend(b_predictions)
+
+        return predictions
+
     @staticmethod
     def _accuracy(output: torch.Tensor, labels: torch.Tensor) -> float:
-        pred_flat = torch.argmax(output, dim=1).flatten()
+        if len(output.shape) == 2:
+            output = torch.argmax(output, dim=1).flatten()
+
         labels_flat = labels.flatten()
-        return torch.sum(pred_flat == labels_flat).item() / len(labels_flat)
+        return torch.sum(output == labels_flat).item() / len(labels_flat)

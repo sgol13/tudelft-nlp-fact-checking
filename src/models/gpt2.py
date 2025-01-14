@@ -1,9 +1,11 @@
 import transformers
 from torch import nn
+from transformers import GPT2Tokenizer, GPT2Model
+
 
 class Gpt2Tokenizer:
     def __init__(self):
-        self._tokenizer = transformers.GPT2Tokenizer.from_pretrained('gpt2')
+        self._tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
         self._tokenizer.pad_token = self._tokenizer.eos_token
 
     def __call__(self, x):
@@ -20,10 +22,11 @@ class Gpt2Tokenizer:
 
 
 class Gpt2Classifier(nn.Module):
-    def __init__(self, model_path, labels_count, mlp_dim, dropout=0, freeze_backbone=False):
+    def __init__(self, model_path='gpt2',
+                 labels_count=3, hidden_dim=1024, mlp_dim=768, dropout=0.1):
         super().__init__()
 
-        self.gpt2 = transformers.GPT2Model.from_pretrained(
+        self.gpt2 = GPT2Model.from_pretrained(
             model_path,
             output_attentions=True,
             output_hidden_states=True,
@@ -37,10 +40,6 @@ class Gpt2Classifier(nn.Module):
             nn.ReLU(),
             nn.Linear(mlp_dim, labels_count)
         )
-
-        if freeze_backbone:
-            for param in self.gpt2.parameters():
-                param.requires_grad = False
 
     def forward(self, tokens, masks):
         backbone_output = self.gpt2(tokens, attention_mask=masks)

@@ -9,9 +9,9 @@ from src.common import QTDataset, QTClaim
 
 
 class EvidenceProcessor:
-    _THRESHOLD = 0.1
+    _THRESHOLD = 0.3
 
-    def __init__(self, decomposed: bool, top_k: int):
+    def __init__(self, decomposed: bool):
         self._decomposed = decomposed
         self._embedding_model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
 
@@ -34,12 +34,11 @@ class EvidenceProcessor:
         sent_embs = self._embedding_model.encode(sentences)
 
         text_sims = cosine_similarity(doc_embs, sent_embs) # shape (100 x #subquestions) for the similarity between each of 100 sources and each subquestion
-        print(text_sims)
+
         # Get top3 evidences for each subquestion and their scores
         potential_evidences = text_sims.argsort(axis=0)[-3:, :]
         potential_evidences_scored = np.sort(text_sims, axis=0)[-3:, :]
 
-        print(potential_evidences_scored)
         # Get final 0-5 evidences between all subquestions that are not the same but have a similarity score of higher than 0.5
         final_evidences = list(set(potential_evidences[-1, :][potential_evidences_scored[-1, :] > self._THRESHOLD].tolist()))
         if len(final_evidences) < 3:

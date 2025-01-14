@@ -10,3 +10,4 @@ ipywidgets
 tqdm
 urllib3<2.0
 matplotlib
+evaluate

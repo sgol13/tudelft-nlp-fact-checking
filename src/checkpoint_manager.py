@@ -37,16 +37,18 @@ class CheckpointsManager:
 
         assert len(filenames) <= 1, f"Multiple epoch checkpoints found: {filenames}"
         name = filenames[0]
-        epoch = int(name.split('_')[1])
+        epoch = self._get_epoch_from_checkpoint_name(name)
         return self._load_model(name), epoch
 
-    def load_best_model(self) -> Optional[ModelWeights]:
+    def load_best_model(self) -> Optional[Tuple[ModelWeights, int]]:
         filenames = self._get_filenames(self._BEST_MODEL_REGEX)
         if not filenames:
             return None
 
         assert len(filenames) == 1, f"Multiple best model checkpoints found: {filenames}"
-        return self._load_model(filenames[0])
+        name = filenames[0]
+        epoch = self._get_epoch_from_checkpoint_name(name)
+        return self._load_model(name), epoch
 
     def load_model(self, name: str) -> Optional[ModelWeights]:
         return self._load_model(name)
@@ -121,3 +123,8 @@ class CheckpointsManager:
 
     def _abs_path(self, name: str) -> str:
         return os.path.join(self._model_dir_path, name)
+
+    def _get_epoch_from_checkpoint_name(self, name: str) -> int:
+        assert (self._LAST_CHECKPOINT_REGEX.fullmatch(name) or
+                self._BEST_MODEL_REGEX.fullmatch(name)), f"Invalid checkpoint name: {name}"
+        return int(name.split('_')[-1])

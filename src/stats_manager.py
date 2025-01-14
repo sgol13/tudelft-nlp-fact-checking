@@ -38,7 +38,10 @@ class StatsManager:
         print(f"   eval:  {epoch_stats['val_loss']:.3f} | {100*epoch_stats['val_accuracy']:.2f}")
 
     def plot(self):
-        xticks = range(1, max(10, len(self._stats)))
+        is_first_epoch = len(self._stats) == 1
+
+        first_tick = 0 if is_first_epoch else 1
+        xticks = range(first_tick, max(10, len(self._stats)))
 
         epochs = [stat['epoch'] for stat in self._stats]
         train_accuracies = [stat['train_accuracy'] for stat in self._stats]
@@ -48,7 +51,7 @@ class StatsManager:
 
         fig, axs = plt.subplots(2, 1, figsize=(8, 5), constrained_layout=True)
 
-        for stat in self._stats[1:]:
+        for stat in self._stats[first_tick:]:
             batch_losses = stat.get('train_loss_batches', [])
             if batch_losses:
                 batch_epochs = [stat['epoch'] - 1 + i / len(batch_losses) for i in range(len(batch_losses))]
@@ -69,6 +72,9 @@ class StatsManager:
         axs[1].set_xticks(xticks)
 
         plt.show()
+
+    def get_epoch_stats(self, epoch: int) -> Dict[str, Union[float, List[float]]]:
+        return self._stats[epoch - 1]
 
     def _save(self):
         with open(self._stats_file_path, "w") as file:
