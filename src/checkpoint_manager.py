@@ -53,12 +53,12 @@ class CheckpointsManager:
     def load_model(self, name: str) -> Optional[ModelWeights]:
         return self._load_model(name)
 
-    def save_checkpoint(self, checkpoint: ModelWeights, epoch: int, val_accuracy: float) -> None:
-        self._update_last_checkpoint(checkpoint, epoch)
+    def save_checkpoint(self, weights: ModelWeights, epoch: int, val_accuracy: float) -> None:
+        # self._update_last_checkpoint(weights, epoch)
 
         if val_accuracy > self._best_val_accuracy:
             self._best_val_accuracy = val_accuracy
-            self._update_best_model(epoch)
+            self._update_best_model(weights, epoch)
 
     def store_best_model(self) -> None:
         best_model_name = self._get_best_model_name()
@@ -69,22 +69,21 @@ class CheckpointsManager:
         shutil.copy(self._abs_path(best_model_name), self._abs_path(permament_name))
         print(f"Stored best model as: {permament_name}")
 
-    def _update_last_checkpoint(self, checkpoint: ModelWeights, epoch: int) -> None:
+    def _update_last_checkpoint(self, weights: ModelWeights, epoch: int) -> None:
         previous_checkpoint_name = self._get_last_checkpoint_name()
 
         filename = f"epoch_{epoch:02}"
-        torch.save(checkpoint, self._abs_path(filename))
+        torch.save(weights, self._abs_path(filename))
         print(f"Saved checkpoint: {filename}")
 
         if previous_checkpoint_name:
             self._remove_checkpoint(previous_checkpoint_name)
 
-    def _update_best_model(self, epoch: int) -> None:
-        last_checkpoint_file = self._get_last_checkpoint_name()
+    def _update_best_model(self, weights: ModelWeights, epoch: int) -> None:
         previous_best_model_file = self._get_best_model_name()
 
         filename = f"best_model_{epoch:02}"
-        shutil.copy(self._abs_path(last_checkpoint_file), self._abs_path(filename))
+        torch.save(weights, self._abs_path(filename))
         print(f"Saved best model: {filename}")
 
         if previous_best_model_file:
@@ -119,7 +118,6 @@ class CheckpointsManager:
     def _remove_checkpoint(self, name: str) -> None:
         path = self._abs_path(name)
         os.remove(path)
-        print(f"Removed: {name}")
 
     def _abs_path(self, name: str) -> str:
         return os.path.join(self._model_dir_path, name)

@@ -1,4 +1,3 @@
-import transformers
 from torch import nn
 from transformers import GPT2Tokenizer, GPT2Model
 
@@ -23,7 +22,7 @@ class Gpt2Tokenizer:
 
 class Gpt2Classifier(nn.Module):
     def __init__(self, model_path='gpt2',
-                 labels_count=3, hidden_dim=1024, mlp_dim=768, dropout=0.1):
+                 labels_count=3, mlp_dim=1024, dropout=0.1):
         super().__init__()
 
         self.gpt2 = GPT2Model.from_pretrained(
@@ -49,3 +48,10 @@ class Gpt2Classifier(nn.Module):
         # Ensure cls_representation is of shape [batch_size, hidden_dim] (768 in your case)
         mlp_output = self.mlp(cls_representation)
         return mlp_output
+
+
+GPT2_CONFIG = {
+    'name': 'gpt2',
+    'model': Gpt2Classifier,
+    'tokenizer': Gpt2Tokenizer,
+}

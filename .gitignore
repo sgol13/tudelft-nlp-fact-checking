@@ -6,7 +6,7 @@
 .tmp.drivedownload
 .tmp.driveupload
 
-# models and checkpoints
 models/
 output/
 data/
+wandb/

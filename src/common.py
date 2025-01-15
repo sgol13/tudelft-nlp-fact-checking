@@ -8,6 +8,9 @@ import pandas as pd
 
 from sklearn.exceptions import UndefinedMetricWarning
 
+from src.models.gpt2 import GPT2_CONFIG
+from src.models.roberta_large_mnli import ROBERTA_LARGE_MNLI_CONFIG
+
 warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
 
 def _build_import_relative_path(path: str):
@@ -28,6 +31,17 @@ QTDataset = List[QTClaim]
 
 QT_VERACITY_LABELS = ['Conflicting', 'False', 'True']
 
+DOC = 'doc'
+NO_DECOMPOSITION = 'no_decomposition'
+GPT3_5_TURBO = 'gpt3.5-turbo'
+FLANT5 = 'flant5'
+
+DECOMPOSITION_METHODS = [
+    DOC,
+    NO_DECOMPOSITION,
+    GPT3_5_TURBO,
+    FLANT5
+]
 
 def get_device() -> torch.device:
     if torch.cuda.is_available():

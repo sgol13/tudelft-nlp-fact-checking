@@ -110,7 +110,7 @@ class ClassificationTraining:
             self._checkpoint_manager.save_checkpoint(self._model.state_dict(), self._epoch, val_stats["val_accuracy"])
 
             self._epoch += 1
-            if self._early_stopping and self._early_stopping(val_stats["val_loss"]):
+            if self._early_stopping and self._early_stopping(val_stats["val_accuracy"]):
                 break
 
             self._stats_manager.plot()
@@ -121,7 +121,7 @@ class ClassificationTraining:
     def evaluate_best_model(self, test_claims: QTDataset, test_dataset: torch.utils.data.TensorDataset) -> None:
         epoch = self.load_best_model()
 
-        predictions = self._predict(test_dataset)
+        predictions = self.predict(test_dataset)
         test_accuracy = self._accuracy(test_dataset.tensors[2], torch.tensor(predictions))
 
         stats = self._stats_manager.get_epoch_stats(epoch)
@@ -138,10 +138,27 @@ class ClassificationTraining:
             "claim": [claim["claim"] for claim in test_claims],
             "verdict": qt_veracity_label_encoder.inverse_transform(predictions)
         })
-        abs_path = os.path.join(OUTPUT_PATH, f'{self._model_name}.csv')
+        abs_path = os.path.join(OUTPUT_PATH, self._model_name, f'{self._model_name}.csv')
         df.to_csv(abs_path, index=False)
         print(f"Saved to {cwd_relative_path(abs_path)}/txt")
 
+    def predict(self, dataset: torch.utils.data.TensorDataset) -> List[int]:
+        self._model.eval()
+
+        dataloader = DataLoader(dataset, sampler=SequentialSampler(dataset), batch_size=64, drop_last=False)
+
+        predictions = []
+        for b_input_tokens, b_input_mask, _ in tqdm(dataloader):
+            b_input_tokens = b_input_tokens.to(self._device)
+            b_input_mask = b_input_mask.to(self._device)
+
+            with torch.no_grad():
+                b_logits = self._model(b_input_tokens, b_input_mask)
+
+            b_predictions = torch.argmax(b_logits, dim=1).flatten().cpu().tolist()
+            predictions.extend(b_predictions)
+
+        return predictions
 
     def _train_epoch(self) -> Dict[str, Union[float, List[float]]]:
         self._model.train()
@@ -196,24 +213,6 @@ class ClassificationTraining:
             "val_accuracy": total_val_accuracy / len(self._val_dataloader),
             "val_loss": total_val_loss / len(self._val_dataloader),
         }
-
-    def _predict(self, dataset: torch.utils.data.TensorDataset) -> List[int]:
-        self._model.eval()
-
-        dataloader = DataLoader(dataset, sampler=SequentialSampler(dataset), batch_size=64, drop_last=False)
-
-        predictions = []
-        for b_input_tokens, b_input_mask, _ in tqdm(dataloader):
-            b_input_tokens = b_input_tokens.to(self._device)
-            b_input_mask = b_input_mask.to(self._device)
-
-            with torch.no_grad():
-                b_logits = self._model(b_input_tokens, b_input_mask)
-
-            b_predictions = torch.argmax(b_logits, dim=1).flatten().cpu().tolist()
-            predictions.extend(b_predictions)
-
-        return predictions
 
     @staticmethod
     def _accuracy(output: torch.Tensor, labels: torch.Tensor) -> float:

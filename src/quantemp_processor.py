@@ -5,7 +5,7 @@ from sklearn.preprocessing import LabelEncoder
 from torch.utils.data import TensorDataset
 from tqdm.auto import tqdm
 
-from src.common import QT_VERACITY_LABELS, QTDataset, QTClaim
+from src.common import QT_VERACITY_LABELS, QTDataset, QTClaim, DECOMPOSITION_METHODS, NO_DECOMPOSITION, DOC
 
 qt_veracity_label_encoder = LabelEncoder()
 qt_veracity_label_encoder.fit(QT_VERACITY_LABELS)
@@ -55,9 +55,11 @@ class QuantempProcessor:
                  tokenizer: Callable[[str], Tuple[torch.Tensor, torch.Tensor]],
                  decomposition: str
                  ):
+        assert decomposition in DECOMPOSITION_METHODS, f"Invalid decomposition method: {decomposition}"
+        self._decomposition_mode = decomposition if decomposition in [NO_DECOMPOSITION, DOC] else 'decomposition'
+        print(self._decomposition_mode)
         self._tokenizer = tokenizer
-        self._decomposition_mode = decomposition
-        assert self._decomposition_mode in self._DECOMPOSITION_MODES, f"Invalid evidence, must be one of {self._DECOMPOSITION_MODES}"
+        assert self._decomposition_mode in self._DECOMPOSITION_MODES, f"Invalid decomposition mode: {self._decomposition_mode}"
 
     def transform(self, dataset: QTDataset) -> TensorDataset:
         features: List[str] = self._extract_features(dataset)
