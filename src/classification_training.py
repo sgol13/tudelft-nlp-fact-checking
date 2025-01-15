@@ -109,11 +109,11 @@ class ClassificationTraining:
 
             self._checkpoint_manager.save_checkpoint(self._model.state_dict(), self._epoch, val_stats["val_accuracy"])
 
+            self._stats_manager.plot()
+
             self._epoch += 1
             if self._early_stopping and self._early_stopping(val_stats["val_accuracy"]):
                 break
-
-            self._stats_manager.plot()
 
     def plot_stats(self) -> None:
         self._stats_manager.plot()
@@ -127,9 +127,12 @@ class ClassificationTraining:
         stats = self._stats_manager.get_epoch_stats(epoch)
         f1_scores: List[float] = calculate_f1_scores(test_claims, predictions)
 
+        output_dir = os.path.join(OUTPUT_PATH, self._model_name)
+        os.makedirs(output_dir, exist_ok=True)
+
         # save output stats
         table_row = [epoch, stats['train_accuracy'], stats['val_accuracy'], test_accuracy] + f1_scores
-        with open(os.path.join(OUTPUT_PATH, f'{self._model_name}.txt'), 'w') as file:
+        with open(os.path.join(output_dir, f'{self._model_name}.txt'), 'w') as file:
             file.write(f"{table_row[0]} ")
             file.write(" ".join(f"{x:.2f}" for x in table_row[1:]))
 
@@ -138,9 +141,9 @@ class ClassificationTraining:
             "claim": [claim["claim"] for claim in test_claims],
             "verdict": qt_veracity_label_encoder.inverse_transform(predictions)
         })
-        abs_path = os.path.join(OUTPUT_PATH, self._model_name, f'{self._model_name}.csv')
-        df.to_csv(abs_path, index=False)
-        print(f"Saved to {cwd_relative_path(abs_path)}/txt")
+
+        df.to_csv(os.path.join(output_dir, f'{self._model_name}.csv'), index=False)
+        print(f"Saved to {cwd_relative_path(output_dir)}")
 
     def predict(self, dataset: torch.utils.data.TensorDataset) -> List[int]:
         self._model.eval()
