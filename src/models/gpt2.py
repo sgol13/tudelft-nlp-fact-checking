@@ -29,7 +29,6 @@ class Gpt2Classifier(nn.Module):
             model_path,
             output_attentions=True,
             output_hidden_states=True,
-            attn_implementation='eager'
         )
 
         hidden_dim = self.gpt2.config.hidden_size
