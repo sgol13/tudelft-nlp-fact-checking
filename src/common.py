@@ -35,12 +35,14 @@ DOC = 'doc'
 NO_DECOMPOSITION = 'no_decomposition'
 GPT3_5_TURBO = 'gpt3.5-turbo'
 FLANT5 = 'flant5'
+CUSTOM_DECOMP = 'custom'
 
 DECOMPOSITION_METHODS = [
     DOC,
     NO_DECOMPOSITION,
     GPT3_5_TURBO,
-    FLANT5
+    FLANT5,
+    CUSTOM_DECOMP
 ]
 
 def get_device() -> torch.device:
