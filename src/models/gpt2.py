@@ -6,6 +6,7 @@ class Gpt2Tokenizer:
     def __init__(self):
         self._tokenizer = GPT2Tokenizer.from_pretrained('gpt2')
         self._tokenizer.pad_token = self._tokenizer.eos_token
+        self._tokenizer.padding_side = "left"
 
     def __call__(self, x):
         encoded_dict = self._tokenizer.encode_plus(
@@ -39,12 +40,15 @@ class Gpt2Classifier(nn.Module):
             nn.Linear(mlp_dim, labels_count)
         )
 
+        for layer in self.gpt2.h[:5]:
+            for param in layer.parameters():
+                param.requires_grad = False
+
     def forward(self, tokens, masks):
         backbone_output = self.gpt2(tokens, attention_mask=masks)
-        last_hidden_state = backbone_output[0]  # Shape: [batch_size, seq_len, hidden_size]
-        cls_representation = last_hidden_state[:, 0, :]  # Shape: [batch_size, hidden_size]
+        last_hidden_state = backbone_output[0]
+        cls_representation = last_hidden_state[:, 0, :]
 
-        # Ensure cls_representation is of shape [batch_size, hidden_dim] (768 in your case)
         mlp_output = self.mlp(cls_representation)
         return mlp_output
 

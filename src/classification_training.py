@@ -148,7 +148,7 @@ class ClassificationTraining:
     def predict(self, dataset: torch.utils.data.TensorDataset) -> List[int]:
         self._model.eval()
 
-        dataloader = DataLoader(dataset, sampler=SequentialSampler(dataset), batch_size=64, drop_last=False)
+        dataloader = DataLoader(dataset, sampler=SequentialSampler(dataset), batch_size=16, drop_last=False)
 
         predictions = []
         for b_input_tokens, b_input_mask, _ in tqdm(dataloader):
